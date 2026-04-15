@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Labirinto 3D Mobile</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        canvas { display: block; }
+        
+        /* Controles Mobile */
+        #controls {
+            position: absolute; bottom: 20px; left: 50%;
+            transform: translateX(-50%); display: grid;
+            grid-template-columns: repeat(3, 60px); grid-gap: 10px;
+        }
+        .btn {
+            width: 60px; height: 60px; background: rgba(255,255,255,0.3);
+            border: 2px solid #fff; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: bold; user-select: none;
+        }
+        .btn:active { background: rgba(255,255,255,0.6); }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <div></div> <div class="btn" id="up">↑</div> <div></div>
+        <div class="btn" id="left">←</div> <div class="btn" id="down">↓</div> <div class="btn" id="right">→</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+
+        // 1. Configuração Básica
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Luz
+        const light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(0, 5, 0);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // 3. Chão e Jogador
+        const playerGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        player.position.y = 0.3;
+        scene.add(player);
+
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(20, 20),
+            new THREE.MeshStandardMaterial({ color: 0x222222 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // 4. Labirinto (Mapa Simples: 1 = Parede, 0 = Caminho)
+        const map = [
+            [1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,1],
+            [1,0,1,0,1,0,1,1,0,1],
+            [1,0,1,0,0,0,0,1,0,1],
+            [1,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,0,1,0,0,0,1],
+            [1,0,1,1,0,1,1,1,0,1],
+            [1,0,0,1,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1],
+        ];
+
+        const wallGroup = new THREE.Group();
+        const wallGeo = new THREE.BoxGeometry(1, 2, 1);
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x4444ff });
+
+        map.forEach((row, z) => {
+            row.forEach((cell, x) => {
+                if(cell === 1) {
+                    const wall = new THREE.Mesh(wallGeo, wallMat);
+                    wall.position.set(x - 5, 1, z - 4.5);
+                    wallGroup.add(wall);
+                }
+            });
+        });
+        scene.add(wallGroup);
+
+        // 5. Movimentação e Câmera
+        camera.position.set(0, 10, 5); // Visão de cima para facilitar no mobile
+        camera.lookAt(player.position);
+
+        function move(dir) {
+            const speed = 0.2;
+            if(dir === 'up') player.position.z -= speed;
+            if(dir === 'down') player.position.z += speed;
+            if(dir === 'left') player.position.x -= speed;
+            if(dir === 'right') player.position.x += speed;
+            
+            // Faz a câmera seguir o jogador
+            camera.position.x = player.position.x;
+            camera.position.z = player.position.z + 5;
+            light.position.set(player.position.x, 3, player.position.z);
+        }
+
+        // Eventos dos Botões
+        const buttons = ['up', 'down', 'left', 'right'];
+        let activeMove = null;
+
+        buttons.forEach(id => {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); activeMove = id; });
+            btn.addEventListener('touchend', () => activeMove = null);
+        });
+
+        // Loop de Animação
+        function animate() {
+            requestAnimationFrame(animate);
+            if(activeMove) move(activeMove);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Ajuste de tela
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
