@@ -3,133 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Labirinto 3D Mobile</title>
+    <title>Horror Maze: The Blue Escape</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        canvas { display: block; }
-        
-        /* Controles Mobile */
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
         #controls {
-            position: absolute; bottom: 20px; left: 50%;
-            transform: translateX(-50%); display: grid;
-            grid-template-columns: repeat(3, 60px); grid-gap: 10px;
+            position: absolute; bottom: 30px; left: 20px;
+            display: grid; grid-template-columns: repeat(3, 65px); grid-gap: 12px;
+            z-index: 10;
         }
         .btn {
-            width: 60px; height: 60px; background: rgba(255,255,255,0.3);
-            border: 2px solid #fff; border-radius: 10px;
+            width: 65px; height: 65px; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.3); border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            color: white; font-weight: bold; user-select: none;
+            color: white; font-size: 24px; user-select: none; touch-action: none;
         }
-        .btn:active { background: rgba(255,255,255,0.6); }
+        #ui {
+            position: absolute; top: 40%; width: 100%; text-align: center;
+            color: white; font-size: 32px; font-weight: bold; pointer-events: none; z-index: 20;
+            text-shadow: 0 0 10px red;
+        }
+        #shoot-area { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
     </style>
 </head>
 <body>
-
+    <div id="ui"></div>
+    <div id="shoot-area"></div>
     <div id="controls">
         <div></div> <div class="btn" id="up">↑</div> <div></div>
-        <div class="btn" id="left">←</div> <div class="btn" id="down">↓</div> <div class="btn" id="right">→</div>
+        <div class="btn" id="left">↺</div> <div class="btn" id="down">↓</div> <div class="btn" id="right">↻</div>
     </div>
 
     <script type="module">
         import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
 
-        // 1. Configuração Básica
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111122);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        scene.background = new THREE.Color(0x000000);
+        scene.fog = new THREE.Fog(0x000000, 0.5, 8);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // 2. Luz
-        const light = new THREE.PointLight(0xffffff, 1, 100);
-        light.position.set(0, 5, 0);
-        scene.add(light);
-        scene.add(new THREE.AmbientLight(0x404040));
+        // --- ARMA MELHORADA ---
+        const gunGroup = new THREE.Group();
+        const metalMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.2 });
+        
+        const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.7), metalMat);
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.3, 0.15), metalMat);
+        grip.position.set(0, -0.2, 0.2);
+        grip.rotation.x = 0.2;
+        
+        gunGroup.add(barrel, grip);
+        gunGroup.position.set(0.35, -0.25, -0.5);
+        camera.add(gunGroup);
+        scene.add(camera);
 
-        // 3. Chão e Jogador
-        const playerGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-        const player = new THREE.Mesh(playerGeometry, playerMaterial);
-        player.position.y = 0.3;
-        scene.add(player);
+        // LANTERNA
+        const spotLight = new THREE.SpotLight(0xffffff, 1.5, 15, Math.PI/6, 0.4);
+        camera.add(spotLight);
+        spotLight.target.position.set(0, 0, -5);
+        camera.add(spotLight.target);
 
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(20, 20),
-            new THREE.MeshStandardMaterial({ color: 0x222222 })
-        );
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
-
-        // 4. Labirinto (Mapa Simples: 1 = Parede, 0 = Caminho)
+        // --- LABIRINTO GIGANTE (12x12) ---
         const map = [
-            [1,1,1,1,1,1,1,1,1,1],
-            [1,0,0,0,1,0,0,0,0,1],
-            [1,0,1,0,1,0,1,1,0,1],
-            [1,0,1,0,0,0,0,1,0,1],
-            [1,1,1,1,1,1,0,1,0,1],
-            [1,0,0,0,0,1,0,0,0,1],
-            [1,0,1,1,0,1,1,1,0,1],
-            [1,0,0,1,0,0,0,0,0,1],
-            [1,1,1,1,1,1,1,1,1,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,0,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,1,1,0,1,0,1,1,1,0,1,0,1],
+            [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+            [1,1,1,0,1,1,1,1,1,0,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,0,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,0,0,0,2,1], // 2 é a Saída
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
         ];
 
-        const wallGroup = new THREE.Group();
-        const wallGeo = new THREE.BoxGeometry(1, 2, 1);
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0x4444ff });
+        const wallGeo = new THREE.BoxGeometry(1, 2.5, 1);
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 1 });
+        let exitPos = new THREE.Vector3();
 
         map.forEach((row, z) => {
             row.forEach((cell, x) => {
                 if(cell === 1) {
                     const wall = new THREE.Mesh(wallGeo, wallMat);
-                    wall.position.set(x - 5, 1, z - 4.5);
-                    wallGroup.add(wall);
+                    wall.position.set(x, 1.25, z);
+                    scene.add(wall);
+                } else if(cell === 2) {
+                    exitPos.set(x, 0, z);
+                    const exitLight = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 5, 16), new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.5 }));
+                    exitLight.position.set(x, 2.5, z);
+                    scene.add(exitLight);
                 }
             });
         });
-        scene.add(wallGroup);
 
-        // 5. Movimentação e Câmera
-        camera.position.set(0, 10, 5); // Visão de cima para facilitar no mobile
-        camera.lookAt(player.position);
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x0a0a0a }));
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
 
-        function move(dir) {
-            const speed = 0.2;
-            if(dir === 'up') player.position.z -= speed;
-            if(dir === 'down') player.position.z += speed;
-            if(dir === 'left') player.position.x -= speed;
-            if(dir === 'right') player.position.x += speed;
-            
-            // Faz a câmera seguir o jogador
-            camera.position.x = player.position.x;
-            camera.position.z = player.position.z + 5;
-            light.position.set(player.position.x, 3, player.position.z);
+        // --- MONSTRO AZUL MELHORADO ---
+        const monster = new THREE.Group();
+        const monsterMat = new THREE.MeshStandardMaterial({ color: 0x0000ff, roughness: 1 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.4, 0.6), monsterMat);
+        
+        // Efeito de "pelos" usando wireframe
+        const fur = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.45, 0.65), new THREE.MeshBasicMaterial({ color: 0x0000aa, wireframe: true }));
+        
+        const eyes = new THREE.Group();
+        const eyeGeo = new THREE.SphereGeometry(0.1, 8, 8);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const e1 = new THREE.Mesh(eyeGeo, eyeMat); e1.position.set(-0.2, 0.4, 0.35);
+        const e2 = new THREE.Mesh(eyeGeo, eyeMat); e2.position.set(0.2, 0.4, 0.35);
+        eyes.add(e1, e2);
+
+        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.1), new THREE.MeshBasicMaterial({ color: 0x220000 }));
+        mouth.position.set(0, 0.1, 0.32);
+        
+        monster.add(body, fur, eyes, mouth);
+        monster.position.set(13, 0.7, 1);
+        scene.add(monster);
+
+        // --- LÓGICA ---
+        let state = { stunned: false, timer: 0, gameOver: false, won: false };
+        const bullets = [];
+        const player = { pos: new THREE.Vector3(1, 1, 1), angle: 0 };
+
+        function shoot() {
+            if(state.gameOver || state.won) return;
+            const b = new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
+            const bLight = new THREE.PointLight(0xffaa00, 2, 3);
+            b.add(bLight);
+            b.position.copy(camera.position);
+            const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+            b.userData = { vel: dir.multiplyScalar(0.3), life: 40 };
+            bullets.push(b); scene.add(b);
+            // Recuo da arma
+            gunGroup.position.z += 0.1;
         }
 
-        // Eventos dos Botões
-        const buttons = ['up', 'down', 'left', 'right'];
-        let activeMove = null;
+        document.getElementById('shoot-area').addEventListener('touchstart', (e) => { e.preventDefault(); shoot(); });
 
-        buttons.forEach(id => {
-            const btn = document.getElementById(id);
-            btn.addEventListener('touchstart', (e) => { e.preventDefault(); activeMove = id; });
-            btn.addEventListener('touchend', () => activeMove = null);
+        let moveDir = null;
+        ['up', 'down', 'left', 'right'].forEach(id => {
+            document.getElementById(id).addEventListener('touchstart', (e) => { e.preventDefault(); moveDir = id; });
+            document.getElementById(id).addEventListener('touchend', () => moveDir = null);
         });
 
-        // Loop de Animação
-        function animate() {
-            requestAnimationFrame(animate);
-            if(activeMove) move(activeMove);
-            renderer.render(scene, camera);
+        function update() {
+            if(state.gameOver || state.won) return;
+
+            // Jogador
+            if(moveDir){
+                let nx = player.pos.x, nz = player.pos.z;
+                if(moveDir==='up'){ nx += Math.sin(player.angle)*0.08; nz += Math.cos(player.angle)*0.08; }
+                if(moveDir==='down'){ nx -= Math.sin(player.angle)*0.08; nz -= Math.cos(player.angle)*0.08; }
+                if(moveDir==='left') player.angle += 0.05;
+                if(moveDir==='right') player.angle -= 0.05;
+                if(map[Math.round(nz)][Math.round(nx)] !== 1){ player.pos.x = nx; player.pos.z = nz; }
+            }
+            camera.position.set(player.pos.x, 1, player.pos.z);
+            camera.rotation.y = player.angle;
+            gunGroup.position.z += ((-0.5) - gunGroup.position.z) * 0.1; // Suaviza recuo
+
+            // Monstro
+            if(!state.stunned){
+                const dir = new THREE.Vector3().subVectors(camera.position, monster.position).normalize();
+                monster.position.x += dir.x * 0.035;
+                monster.position.z += dir.z * 0.035;
+                monster.lookAt(camera.position.x, 0.7, camera.position.z);
+                body.material.color.set(0x0000ff);
+            } else {
+                state.timer--; body.material.color.set(0x555500);
+                if(state.timer<=0) state.stunned = false;
+            }
+
+            // Colisões e Tiros
+            bullets.forEach((b, i) => {
+                b.position.add(b.userData.vel);
+                if(b.position.distanceTo(monster.position) < 0.8){
+                    state.stunned = true; state.timer = 180;
+                    scene.remove(b); bullets.splice(i,1);
+                }
+                b.userData.life--; if(b.userData.life<=0){ scene.remove(b); bullets.splice(i,1); }
+            });
+
+            // Condições Finais
+            if(camera.position.distanceTo(monster.position) < 0.75){
+                state.gameOver = true; document.getElementById('ui').innerText = "VOCÊ MORREU";
+            }
+            if(camera.position.distanceTo(exitPos) < 0.8){
+                state.won = true; document.getElementById('ui').innerText = "VOCÊ ESCAPOU!";
+                document.getElementById('ui').style.color = "#00ff88";
+            }
         }
+
+        function animate() { requestAnimationFrame(animate); update(); renderer.render(scene, camera); }
         animate();
-
-        // Ajuste de tela
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
